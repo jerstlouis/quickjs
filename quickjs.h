@@ -126,7 +126,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
 {
     return 0;
 }
-    
+
 #elif defined(JS_NAN_BOXING)
 
 typedef uint64_t JSValue;
@@ -191,11 +191,15 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v)
     tag = JS_VALUE_GET_TAG(v);
     return tag == (JS_NAN >> 32);
 }
-    
+
 #else /* !JS_NAN_BOXING */
 
 typedef union JSValueUnion {
+#ifdef __ecere_C
+    int32_t qjs_int32;
+#else
     int32_t int32;
+#endif
     double float64;
     void *ptr;
 } JSValueUnion;
@@ -210,13 +214,24 @@ typedef struct JSValue {
 #define JS_VALUE_GET_TAG(v) ((int32_t)(v).tag)
 /* same as JS_VALUE_GET_TAG, but return JS_TAG_FLOAT64 with NaN boxing */
 #define JS_VALUE_GET_NORM_TAG(v) JS_VALUE_GET_TAG(v)
+
+#ifdef __ecere_C
+#define JS_VALUE_GET_INT(v) ((v).u.qjs_int32)
+#define JS_VALUE_GET_BOOL(v) ((v).u.qjs_int32)
+#else
 #define JS_VALUE_GET_INT(v) ((v).u.int32)
 #define JS_VALUE_GET_BOOL(v) ((v).u.int32)
+#endif
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
+#ifdef __ecere_C
+#define JS_MKVAL(t, val) __extension__({JSValue v = { { 0 } }; v.u.qjs_int32 = val; v.tag = t; v;})
+#define JS_MKPTR(t, p)   __extension__({JSValue v = { { 0 } }; v.u.ptr       = p;   v.tag = t; v;})
+#else
 #define JS_MKVAL(tag, val) (JSValue){ (JSValueUnion){ .int32 = val }, tag }
 #define JS_MKPTR(tag, p) (JSValue){ (JSValueUnion){ .ptr = p }, tag }
+#endif
 
 #define JS_TAG_IS_FLOAT64(tag) ((unsigned)(tag) == JS_TAG_FLOAT64)
 
@@ -521,7 +536,7 @@ static js_force_inline JSValue JS_NewInt64(JSContext *ctx, int64_t val)
 {
     JSValue v;
     if (val == (int32_t)val) {
-        v = JS_NewInt32(ctx, val);
+        v = JS_NewInt32(ctx, (int32_t)val);
     } else {
         v = __JS_NewFloat64(ctx, val);
     }
@@ -955,9 +970,9 @@ static inline JSValue JS_NewCFunctionMagic(JSContext *ctx, JSCFunctionMagic *fun
                                            const char *name,
                                            int length, JSCFunctionEnum cproto, int magic)
 {
-    return JS_NewCFunction2(ctx, (JSCFunction *)func, name, length, cproto, magic);
+    return JS_NewCFunction2(ctx, (JSCFunction *)(void *)func, name, length, cproto, magic);
 }
-void JS_SetConstructor(JSContext *ctx, JSValueConst func_obj, 
+void JS_SetConstructor(JSContext *ctx, JSValueConst func_obj,
                        JSValueConst proto);
 
 /* C property definition */
@@ -974,8 +989,12 @@ typedef struct JSCFunctionListEntry {
             JSCFunctionType cfunc;
         } func;
         struct {
+#ifdef __ecere_C
+            JSCFunctionType qjs_get, qjs_set;
+#else
             JSCFunctionType get;
             JSCFunctionType set;
+#endif
         } getset;
         struct {
             const char *name;
